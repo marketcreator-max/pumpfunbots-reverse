@@ -2,8 +2,10 @@
 """Score $100 paper trades from decisions.jsonl and a price CSV.
 
 CSV columns: mint, ts_ms, price_usd
-Optional: quote_reserve, base_reserve (USD quote and token base) for
-constant-product impact of the $100 buy and of the token sell.
+Optional price_sol plus quote_reserve (SOL) and base_reserve (tokens).
+A $100 buy is converted to SOL with price_usd/price_sol and sent through
+the constant-product reserves. Without price_sol, quote_reserve is treated
+as USD. Without reserves, fills use the spot print.
 
 Fill is the sample nearest to decision+2s, within 3s. A second pass uses
 decision+3s (sensitivity). Fee is 0.5% per side.
@@ -67,7 +69,19 @@ def load_prices(path):
                 base = float(br) if br != "" else None
             except ValueError:
                 base = None
-            by_mint[mint].append({"ts": ts, "price": px, "quote": quote, "base": base})
+            raw_sol = row.get("price_sol") or ""
+            try:
+                price_sol = float(raw_sol) if raw_sol != "" else None
+            except ValueError:
+                price_sol = None
+            sol_usd = (px / price_sol) if price_sol and price_sol > 0 else None
+            by_mint[mint].append({
+                "ts": ts,
+                "price": px,
+                "quote": quote,
+                "base": base,
+                "sol_usd": sol_usd,
+            })
     for mint in by_mint:
         by_mint[mint].sort(key=lambda s: s["ts"])
     return by_mint
@@ -114,24 +128,37 @@ def nearest(samples, target, tol=TOL_MS):
 
 
 def buy_exec(spot_row):
-    """Return (exec_price, tokens). Fee reduces quote that hits the pool."""
+    """Return (exec_price_usd, tokens). Fee reduces the quote that hits the pool.
+
+    When sol_usd is set, quote_reserve is SOL and base_reserve is tokens.
+    $100 is converted to SOL, then constant-product impact is applied.
+    Otherwise quote_reserve is already USD.
+    """
     spot = spot_row["price"]
-    quote_in = NOTIONAL * (1.0 - FEE)
     q, b = spot_row.get("quote"), spot_row.get("base")
-    if q and b and q > 0 and b > 0:
-        k = q * b
-        base_out = b - (k / (q + quote_in))
+    sol_usd = spot_row.get("sol_usd")
+    if q and b and q > 0 and b > 0 and sol_usd and sol_usd > 0:
+        quote_in_sol = (NOTIONAL * (1.0 - FEE)) / sol_usd
+        base_out = b - ((q * b) / (q + quote_in_sol))
+        if base_out > 0:
+            return (quote_in_sol / base_out) * sol_usd, base_out
+    quote_in = NOTIONAL * (1.0 - FEE)
+    if q and b and q > 0 and b > 0 and not sol_usd:
+        base_out = b - ((q * b) / (q + quote_in))
         if base_out > 0:
             return quote_in / base_out, base_out
-    tokens = quote_in / spot
-    return spot, tokens
+    return spot, quote_in / spot
 
 
 def sell_proceeds(tokens, row):
     q, b = row.get("quote"), row.get("base")
-    if q and b and q > 0 and b > 0 and tokens > 0:
-        k = q * b
-        quote_out = q - (k / (b + tokens))
+    sol_usd = row.get("sol_usd")
+    if q and b and q > 0 and b > 0 and tokens > 0 and sol_usd and sol_usd > 0:
+        quote_out = q - ((q * b) / (b + tokens))
+        if quote_out > 0:
+            return quote_out * (1.0 - FEE) * sol_usd
+    if q and b and q > 0 and b > 0 and tokens > 0 and not sol_usd:
+        quote_out = q - ((q * b) / (b + tokens))
         if quote_out > 0:
             return quote_out * (1.0 - FEE)
     return tokens * row["price"] * (1.0 - FEE)

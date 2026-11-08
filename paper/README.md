@@ -41,12 +41,22 @@ Outputs:
 - `paper/out/run-<UTC stamp>.log` — bot stdout, passed through `paper/redact.py` so exported URL values and `api-key=` query strings are removed
 - `paper/out/decisions.jsonl` — one JSON object per graduation signal, buy, sell, and graduated hold: `mint`, `ts_ms`, `event`, `price_sol`, `mc` (null; the bot does not log market cap)
 
-## 3. Score
+## 3. Collect prices
 
-Price CSV header: `mint,ts_ms,price_usd`. Optional `quote_reserve,base_reserve` (USD quote and token base) apply constant-product impact on the $100 buy and the sell. Without them, fills use the spot print.
+In a second terminal, while the paper run is writing decisions. This process only calls `getAccountInfo` and a public SOL/USD price GET. It does not load a key or sign.
 
 ```bash
-python3 paper/score.py paper/out/decisions.jsonl prices.csv \
+node paper/collect_prices.mjs
+```
+
+For each `buy` in `paper/out/decisions.jsonl` it polls the pump.fun bonding curve once a second for 60 minutes (the PumpSwap canonical pool after the curve is complete). SOL/USD comes from the Jupiter price API, cached 10 seconds, and falls back to the Pyth SOL/USD account on the same RPC. `RPC_URL` or `HELIUS_*` / `ALCHEMY_*` must already be exported. The URL and key are not printed.
+
+`paper/out/prices.csv` columns: `mint,ts_ms,price_sol,price_usd,quote_reserve,base_reserve`. Reserves are SOL and tokens (virtual reserves on the curve, vault balances on PumpSwap).
+
+## 4. Score
+
+```bash
+python3 paper/score.py paper/out/decisions.jsonl paper/out/prices.csv \
   -o paper/out/score.md \
   --json paper/out/score.json
 ```
@@ -57,6 +67,7 @@ Rules:
 - fill at the print nearest to decision+2s, falling back to the nearest print within 3s; otherwise the trade is unfilled
 - the `pnl_usd_+3s` column repeats the score with decision+3s
 - 0.5% fee each side
+- when `price_sol` and reserves are present, $100 is converted to SOL and the constant-product impact is taken from those reserves; a CSV with no `price_sol` still treats `quote_reserve` as USD
 - bot exit versus `T30` (30% trail from peak), `H10` (hard stop −10%, else 15 min), `TP2x_trail`, `TP5x_trail` (take-profit or the same 30% trail, whichever first), `t5m`, `t15m`
 - a rug is any print at or below 0.2× entry inside 15 minutes
 - a 2× / 5× runner is any mint whose max print in that window reaches 2× or 5×; the runners table lists all of them
