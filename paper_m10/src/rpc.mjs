@@ -33,7 +33,7 @@ export async function solRpc(url, method, params, fetchImpl = globalThis.fetch) 
   return body.result;
 }
 
-export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, logger }) {
+export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, logger, createSocket }) {
   const urls = wsUrls?.length ? wsUrls : [wsUrl];
   let attempt = 0;
   let urlIndex = 0;
@@ -59,7 +59,7 @@ export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, lo
     const url = urls[urlIndex % urls.length];
     let opened = false;
     let sawClose = false;
-    const socket = new WebSocket(url);
+    const socket = createSocket ? createSocket(url) : new WebSocket(url);
     sockets.add(socket);
     socket.on("pong", () => { lastRx = Date.now(); });
     socket.addEventListener("open", () => {

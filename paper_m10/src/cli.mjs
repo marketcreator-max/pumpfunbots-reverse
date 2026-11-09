@@ -5,6 +5,7 @@ import { realpathSync } from "node:fs";
 import { loadConfigs } from "./config.mjs";
 import { createLogger } from "./redact.mjs";
 import { readJsonl } from "./util.mjs";
+import { combineReports } from "./report.mjs";
 import { scoreTape } from "./score.mjs";
 import { writeResult, writeManifest } from "./output.mjs";
 import { runLive } from "./live.mjs";
@@ -113,14 +114,13 @@ async function scoreDir(flags) {
   const configs = loadConfigs({ gates: flags.gates, exits: flags.exits, fees: flags.fees });
   let extraGaps = [];
   try {
-    const { readJsonl } = await import("./util.mjs");
     extraGaps = readJsonl(join(flags.out, "gaps.jsonl"));
   } catch { /* no supervisor gaps */ }
   const reports = [];
   for (const chain of chains) {
     const tape = join(flags.out, chain, "tape.jsonl");
     let events = [];
-    try { events = (await import("./util.mjs")).readJsonl(tape); } catch { continue; }
+    try { events = readJsonl(tape); } catch { continue; }
     const result = scoreTape(events, {
       ...configs,
       chain,
@@ -131,7 +131,6 @@ async function scoreDir(flags) {
     await writeResult(join(flags.out, chain), result);
     reports.push(result.report);
   }
-  const { combineReports } = await import("./report.mjs");
   await writeFile(join(flags.out, "report.md"), combineReports(reports));
   await writeFile(join(flags.out, "report.json"), `${JSON.stringify(reports.map((report) => report.json), null, 2)}\n`);
   await writeManifest(flags.out);

@@ -1,4 +1,4 @@
-import { createWriteStream } from "node:fs";
+import { createWriteStream, statSync } from "node:fs";
 import { mkdir, appendFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PUMP_AMM_PROGRAM, PUMP_PROGRAM } from "./constants.mjs";
@@ -81,7 +81,9 @@ export async function runLive({
   runId = makeRunId(),
   logger,
   keepAll = false,
-  healthMs = 30_000,
+  healthMs = HEARTBEAT_MS,
+  fetchImpl,
+  createSolSocket,
   solPublic = false,
   hoodPublic = false,
   scoreAtEnd = false,
@@ -115,7 +117,6 @@ export async function runLive({
     await mkdir(dir, { recursive: true });
     const identity = identityFor(chain, runId);
     const tapePath = join(dir, "tape.jsonl");
-    const { statSync } = await import("node:fs");
     let existing = false;
     try { existing = statSync(tapePath).size > 0; } catch { /* new tape */ }
     const tape = openTape(tapePath, (obj) => {
@@ -126,8 +127,8 @@ export async function runLive({
     else tape.write({ type: "resume", ...identity, at: Date.now() });
     try {
       const handle = chain === "SOL"
-        ? await runSol({ dir, identity, tape, configs, logger, keepAll, solPublic, stopAt, pulse })
-        : await runHood({ dir, identity, tape, configs, logger, keepAll, hoodPublic, stopAt, pulse });
+        ? await runSol({ dir, identity, tape, configs, logger, keepAll, solPublic, stopAt, pulse, fetchImpl, createSolSocket })
+        : await runHood({ dir, identity, tape, configs, logger, keepAll, hoodPublic, stopAt, pulse, fetchImpl });
       stoppers.push(handle.stop);
       await handle.done;
     } catch (error) {
@@ -161,7 +162,6 @@ export async function runLive({
     reports.push(result.report);
     results.push(result);
   }
-  const { writeFile } = await import("node:fs/promises");
   await writeFile(join(outDir, "report.md"), combineReports(reports));
   await writeFile(join(outDir, "report.json"), JSON.stringify(reports.map((report) => report.json), (_k, v) => (typeof v === "bigint" ? v.toString() : v), 2));
   const manifestCount = await writeManifest(outDir);
@@ -169,14 +169,14 @@ export async function runLive({
   return { runId, results };
 }
 
-async function runSol({ dir, identity, tape, configs, logger, keepAll, solPublic, pulse }) {
+async function runSol({ dir, identity, tape, configs, logger, keepAll, solPublic, pulse, fetchImpl, createSolSocket }) {
   const publicFeeds = [
     { name: "public-mainnet", http: "https://api.mainnet-beta.solana.com", ws: "wss://api.mainnet-beta.solana.com" },
     { name: "publicnode", http: "https://solana-rpc.publicnode.com", ws: "wss://solana-rpc.publicnode.com" },
   ];
   const endpoints = solPublic ? publicFeeds[0] : resolveSolEndpoints();
   logger.info(`sol feed source=${solPublic ? "public" : endpoints.name}`);
-  const price = createPriceFeed({ logger });
+  const price = createPriceFeed({ logger, fetchImpl });
   let latest = await price.solUsd();
   const priceTimer = setInterval(() => {
     price.solUsd().then((row) => { latest = row; }).catch(() => {});
@@ -350,6 +350,7 @@ async function runSol({ dir, identity, tape, configs, logger, keepAll, solPublic
   const feed = subscribeSolLogs({
     wsUrl: endpoints.ws,
     wsUrls: solPublic ? publicFeeds.map((item) => item.ws) : [endpoints.ws],
+    createSocket: createSolSocket,
     mentions: [PUMP_PROGRAM, PUMP_AMM_PROGRAM],
     logger,
     onStatus: ({ state }) => {
@@ -415,7 +416,7 @@ async function runSol({ dir, identity, tape, configs, logger, keepAll, solPublic
   };
 }
 
-async function runHood({ dir, identity, tape, configs, logger, hoodPublic, pulse }) {
+async function runHood({ dir, identity, tape, configs, logger, hoodPublic, pulse, fetchImpl }) {
   let config;
   try {
     config = parseHoodConfig(configs.hood);
@@ -439,7 +440,7 @@ async function runHood({ dir, identity, tape, configs, logger, hoodPublic, pulse
     await tape.end();
     throw error;
   }
-  const price = createPriceFeed({ logger });
+  const price = createPriceFeed({ logger, fetchImpl });
   const timers = [];
   const hoodStats = { polls: 0, errors: 0, rateLimits: 0, events: 0, skippedBlocks: 0, head: null };
   pulse.hood = hoodStats;

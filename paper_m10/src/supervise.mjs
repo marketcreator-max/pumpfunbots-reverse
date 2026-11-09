@@ -54,10 +54,11 @@ async function watchChild(child, { deadline, outDir, logger }) {
   let settled = false;
   let killed = null;
   return new Promise((resolve) => {
+    let timer = null;
     const finish = (reason) => {
       if (settled) return;
       settled = true;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       resolve(reason);
     };
     child.once("exit", (code) => {
@@ -65,7 +66,7 @@ async function watchChild(child, { deadline, outDir, logger }) {
       else if (Date.now() >= deadline) finish("deadline");
       else finish(code === 0 ? "exit" : "crash");
     });
-    const timer = setInterval(async () => {
+    timer = setInterval(async () => {
       if (killed) return;
       if (Date.now() >= deadline) {
         killed = "deadline";
