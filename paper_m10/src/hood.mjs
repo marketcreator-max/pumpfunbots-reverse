@@ -2,11 +2,12 @@ import { identityFor } from "./chain.mjs";
 import { addressFromWord, decodeUniswapV3PoolCreated, decodeUniswapV3Swap, decodeUniswapV2Swap, intFromWord, uintFromWord, v3RawPrice, words } from "./abi.mjs";
 import { redact } from "./redact.mjs";
 import { backoffMs } from "./util.mjs";
+import { hoodWindow, isHoodRateLimit, MAX_HOOD_RANGE } from "./watchdog.mjs";
 
 export const HOOD_CHAIN_ID = 4663n;
 export const HOOD_CHAIN_ID_HEX = "0x1237";
-export const POLL_MS = 1500;
-export const BLOCK_BATCH = 20;
+export const POLL_MS = 3000;
+export const BLOCK_BATCH = 200;
 const V2_SWAP = "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822";
 const V3_SWAP = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67";
 const PV3_SWAP = "0x19b47279256b2a23a1665c810c8d55a1758940ee09377d4f8d26497a3577dc83";
@@ -274,6 +275,7 @@ export async function hoodRpc(url, method, params, fetchImpl = globalThis.fetch)
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     signal: AbortSignal.timeout(8000),
   });
+  if (response.status === 429) throw new Error("hood http 429");
   const body = await response.json();
   if (body.error) throw new Error(redact(JSON.stringify(body.error)));
   return body.result;
@@ -300,8 +302,13 @@ export function createHoodClient(urls, { fetchImpl = globalThis.fetch, logger } 
 }
 
 export function hoodEndpoints(config, env = process.env) {
-  if (env.HOOD_RPC_URL) return [env.HOOD_RPC_URL];
-  return config.urls;
+  const urls = [];
+  if (env.HOOD_RPC_URL) urls.push(env.HOOD_RPC_URL);
+  if (env.ALCHEMY_API_KEY) urls.push(`https://robinhood-mainnet.g.alchemy.com/v2/${env.ALCHEMY_API_KEY}`);
+  for (const url of config.urls ?? []) {
+    if (url && !urls.includes(url)) urls.push(url);
+  }
+  return urls;
 }
 
 export async function assertHoodChain(client) {
@@ -313,6 +320,7 @@ export async function assertHoodChain(client) {
 }
 
 export async function pollHoodOnce({ client, config, state, fromBlock, toBlock, identity, ethUsd, gasPriceWei, localRecvTs, logger }) {
+  if (toBlock - fromBlock > MAX_HOOD_RANGE) fromBlock = toBlock - MAX_HOOD_RANGE;
   const events = [];
   const blockTimeMs = new Map();
   const batches = blockBatches(fromBlock, toBlock);
@@ -384,47 +392,66 @@ async function enrichCreates(client, events, state) {
   }
 }
 
-export function startHoodPoll({ client, config, identity, price, onEvents, logger, intervalMs = POLL_MS }) {
+export function startHoodPoll({ client, config, identity, price, onEvents, logger, intervalMs = POLL_MS, stats }) {
   const state = createHoodState();
   let stopped = false;
   let timer = null;
   let cursor = null;
+  let rateAttempt = 0;
+  const counts = stats ?? { polls: 0, errors: 0, rateLimits: 0, events: 0, skippedBlocks: 0 };
   const loop = async () => {
     if (stopped) return;
+    let delay = intervalMs;
     try {
+      counts.polls++;
       const headHex = await client.call("eth_blockNumber", []);
       const head = Number(BigInt(headHex));
-      if (cursor == null) cursor = Math.max(0, head - BLOCK_BATCH);
-      if (head >= cursor) {
-        let gasPriceWei = null;
-        try {
-          gasPriceWei = BigInt(await client.call("eth_gasPrice", [])).toString();
-        } catch (error) {
-          logger?.warn(`hood gasPrice failed: ${redact(error.message)}`);
-        }
-        const eth = await price.ethUsd();
-        const events = await pollHoodOnce({
-          client,
-          config,
-          state,
-          fromBlock: cursor,
-          toBlock: head,
-          identity,
-          ethUsd: eth.usd,
-          gasPriceWei,
-          localRecvTs: Date.now(),
-          logger,
-        });
-        cursor = head + 1;
-        if (events.length) await onEvents(events);
+      counts.head = head;
+      const window = hoodWindow(cursor, head, MAX_HOOD_RANGE);
+      if (window.skipped > 0) {
+        counts.skippedBlocks += window.skipped;
+        logger?.warn(`hood skipped ${window.skipped} blocks to stay within ${MAX_HOOD_RANGE} of the head`);
       }
+      while (state.pools.size > 300) state.pools.delete(state.pools.keys().next().value);
+      let gasPriceWei = null;
+      try {
+        gasPriceWei = BigInt(await client.call("eth_gasPrice", [])).toString();
+      } catch (error) {
+        logger?.warn(`hood gasPrice failed: ${redact(error.message)}`);
+      }
+      const eth = await price.ethUsd();
+      const events = await pollHoodOnce({
+        client,
+        config,
+        state,
+        fromBlock: window.from,
+        toBlock: window.to,
+        identity,
+        ethUsd: eth.usd,
+        gasPriceWei,
+        localRecvTs: Date.now(),
+        logger,
+      });
+      cursor = head + 1;
+      rateAttempt = 0;
+      counts.events += events.length;
+      if (events.length) await onEvents(events);
     } catch (error) {
-      logger?.warn(`hood poll failed: ${redact(error.message)}`);
+      counts.errors++;
+      if (isHoodRateLimit(error)) {
+        counts.rateLimits++;
+        rateAttempt++;
+        delay = backoffMs(Math.min(rateAttempt, 6));
+        logger?.warn(`hood rate limit, backing off ${delay}ms`);
+      } else {
+        logger?.warn(`hood poll failed: ${redact(error.message)}`);
+      }
     }
-    if (!stopped) timer = setTimeout(loop, intervalMs);
+    if (!stopped) timer = setTimeout(loop, delay);
   };
   timer = setTimeout(loop, 0);
   return {
+    stats: counts,
     stop() {
       stopped = true;
       if (timer) clearTimeout(timer);

@@ -11,18 +11,21 @@ cd paper_m10
 ./run.sh --hours 3 --out out/run1 --chains SOL
 ./run.sh --hours 3 --out out/run1 --chains SOL,HOOD
 ./run.sh --hours 3 --out out/run1 --chains SOL --foreground
+./run.sh --minutes 10 --out out/soak --chains SOL,HOOD --foreground
 node --test test/*.test.mjs
 ```
 
-`run.sh` detaches with `setsid` unless `--foreground` is set. SOL uses `RPC_URL` / `WS_URL`, or `HELIUS_API_KEY`, or the public mainnet endpoint, then `wss://solana-rpc.publicnode.com` if that socket drops. Those values are never logged. `api-key=` is stripped from errors. SOL/USD tries Pyth, then Coinbase `SOL-USD`, then Jupiter, and caches the result for 10 seconds.
+`run.sh` is a supervisor. It detaches with `setsid` unless `--foreground` is set. It restarts the engine if the process dies or the heartbeat file is older than 60 seconds, appending to the same tape and keeping `run_id`. At the wall-clock deadline a separate process scores the tapes and the engine is stopped. `--minutes 10` is the soak.
 
-HOOD polls `eth_getLogs` about every 1.5 seconds. There is no public websocket. Endpoints, in order, come from `config/hood_sources.json`:
+SOL uses `RPC_URL` / `WS_URL`, or `HELIUS_API_KEY`, or the public mainnet endpoint, then `wss://solana-rpc.publicnode.com` if that socket drops. Twenty seconds of websocket silence forces a reconnect. SOL/USD is the Coinbase spot, with Jupiter v2 as the fallback, cached for 10 seconds. Those URLs are never logged. `api-key=` is stripped from errors.
+
+HOOD polls `eth_getLogs` every 3 seconds, at most 200 blocks behind the head. There is no public websocket. `HOOD_RPC_URL` is first, then Alchemy `robinhood-mainnet.g.alchemy.com` when `ALCHEMY_API_KEY` is set, then:
 
 - `https://rpc.mainnet.chain.robinhood.com`
 - `https://robinhood-rpc.publicnode.com`
 - `https://robinhood.drpc.org`
 
-`HOOD_RPC_URL` replaces that list. The process stops the HOOD side if `eth_chainId` is not `0x1237`.
+HTTP 429s and archive errors back off with jitter. The process stops the HOOD side if `eth_chainId` is not `0x1237`.
 
 New HOOD pools come from the Uniswap V3 factory `0x1f7d7550b1b028f7571e69a784071f0205fd2efa` (`PoolCreated`). Swaps are then read from those pools (Uniswap V2, V3, Pancake V3, and the V4 topic). Minute 10 is the pool's block time plus 10 minutes.
 

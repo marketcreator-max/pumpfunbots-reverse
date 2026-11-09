@@ -17,6 +17,7 @@ import {
   coverageOf,
 } from "./outcome.mjs";
 import { buildReport } from "./report.mjs";
+import { assessRun, sumGaps } from "./watchdog.mjs";
 
 function midOf(tr, chain) {
   if (chain === "HOOD") return tr.priceUsd ?? null;
@@ -264,6 +265,7 @@ export function scoreTape(rawEvents, cfg) {
             supplyRaw: supply ?? 0n,
             decimals,
             fees: cfg.fees,
+            windowComplete: observed,
           });
           scored.push({
             ...identity,
@@ -277,6 +279,7 @@ export function scoreTape(rawEvents, cfg) {
             name: minute10.name,
             symbol: minute10.symbol,
             filled: true,
+            incomplete: Boolean(sim.incomplete),
             pnlUsd: roundUsd(sim.pnlUsd),
             exitMultiple: roundUsd(sim.exitMultiple),
             peakMultiple: roundUsd(stats.peakMultiple),
@@ -295,6 +298,24 @@ export function scoreTape(rawEvents, cfg) {
   const operators = slotOperators(mints, tokenRows, identity, cfg.chain, cfg.classify.bundleMinBuys ?? 3);
   const recurring = recurringEvaluation(tokenRows);
   const observedTokens = tokenRows.filter((row) => row.observed);
+  const gapInfo = sumGaps([
+    ...events.filter((event) => event.type === "gap"),
+    ...(cfg.extraGaps ?? []),
+  ]);
+  let firstTs = null;
+  let lastTs = null;
+  for (const event of events) {
+    if (typeof event.recvTs !== "number") continue;
+    if (firstTs == null || event.recvTs < firstTs) firstTs = event.recvTs;
+    if (lastTs == null || event.recvTs > lastTs) lastTs = event.recvTs;
+  }
+  const durationMs = cfg.durationMs ?? (firstTs != null && lastTs != null ? lastTs - firstTs : 0);
+  const validity = assessRun({
+    decided: tokenRows.length,
+    incomplete: tokenRows.filter((row) => !row.observed).length,
+    gapMs: gapInfo.total,
+    durationMs,
+  });
   const north = {
     rules: TESTABLE_RULES,
     coverage: coverageOf(tokenRows),
@@ -303,6 +324,8 @@ export function scoreTape(rawEvents, cfg) {
     confusionG0: confusion(observedTokens.filter((row) => row.gatePass.includes("G0")).map((row) => ({ predicted: row.predicted, actual: row.outcome }))),
     recurring,
     runners: observedTokens.filter((row) => row.reached2x).sort((a, b) => b.peakMultiple - a.peakMultiple),
+    validity,
+    gaps: gapInfo.rows,
   };
   const report = buildReport({ identity, features, decisions, scored, exits: cfg.exits, gates: cfg.gates, north, tokens: tokenRows });
   return { identity, features, decisions, scored, wallets, timelines, operators, tokens: tokenRows, north, report };

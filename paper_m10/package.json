@@ -3,11 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "live": "node src/cli.mjs live",
     "replay": "node src/cli.mjs replay",
     "smoke": "node src/cli.mjs smoke"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
   }
 }

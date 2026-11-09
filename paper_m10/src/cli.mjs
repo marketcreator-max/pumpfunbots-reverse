@@ -1,5 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { loadConfigs } from "./config.mjs";
 import { createLogger } from "./redact.mjs";
 import { readJsonl } from "./util.mjs";
@@ -7,6 +9,8 @@ import { scoreTape } from "./score.mjs";
 import { writeResult, writeManifest } from "./output.mjs";
 import { runLive } from "./live.mjs";
 import { parseHoodConfig, createHoodClient, assertHoodChain } from "./hood.mjs";
+import { durationMs } from "./watchdog.mjs";
+import { supervise } from "./supervise.mjs";
 
 function args(argv) {
   const out = { _: [] };
@@ -98,9 +102,54 @@ async function smoke(flags) {
   if (!report.hood?.ok && !report.sol?.ok) process.exitCode = 1;
 }
 
+async function scoreDir(flags) {
+  if (!flags.out) throw new Error("score requires --out");
+  let started = {};
+  try { started = JSON.parse(await readFile(join(flags.out, "started.json"), "utf8")); } catch { /* replay without supervisor */ }
+  let runId = flags["run-id"] || started.runId;
+  try { if (!runId) runId = (await readFile(join(flags.out, "run_id"), "utf8")).trim(); } catch { /* none */ }
+  if (!runId) throw new Error("score requires --run-id or started.json");
+  const chains = chainList(flags.chains || (started.chains ?? ["SOL"]).join?.(",") || started.chains);
+  const configs = loadConfigs({ gates: flags.gates, exits: flags.exits, fees: flags.fees });
+  let extraGaps = [];
+  try {
+    const { readJsonl } = await import("./util.mjs");
+    extraGaps = readJsonl(join(flags.out, "gaps.jsonl"));
+  } catch { /* no supervisor gaps */ }
+  const reports = [];
+  for (const chain of chains) {
+    const tape = join(flags.out, chain, "tape.jsonl");
+    let events = [];
+    try { events = (await import("./util.mjs")).readJsonl(tape); } catch { continue; }
+    const result = scoreTape(events, {
+      ...configs,
+      chain,
+      runId,
+      extraGaps,
+      durationMs: started.durationMs,
+    });
+    await writeResult(join(flags.out, chain), result);
+    reports.push(result.report);
+  }
+  const { combineReports } = await import("./report.mjs");
+  await writeFile(join(flags.out, "report.md"), combineReports(reports));
+  await writeFile(join(flags.out, "report.json"), `${JSON.stringify(reports.map((report) => report.json), null, 2)}\n`);
+  await writeManifest(flags.out);
+  const invalid = reports.filter((report) => report.json?.north?.validity && !report.json.north.validity.valid);
+  console.log(`score run_id=${runId} chains=${chains.join(",")} invalid=${invalid.length}`);
+}
+
+function liveHours(flags) {
+  const minutes = flags.minutes ? Number(flags.minutes) : 0;
+  const hours = flags.hours ? Number(flags.hours) : 0;
+  const ms = durationMs({ hours, minutes });
+  if (ms <= 0) throw new Error("pass --hours or --minutes");
+  return ms / 3_600_000;
+}
+
 async function main() {
   const flags = args(process.argv.slice(2));
-  const command = flags._[0] ?? "live";
+  const command = flags._[0] ?? "supervise";
   if (command === "replay") {
     await replay(flags);
     return;
@@ -109,25 +158,54 @@ async function main() {
     await smoke(flags);
     return;
   }
-  if (command !== "live") throw new Error(`Unknown command ${command}`);
-  if (!flags.hours || !flags.out) throw new Error("live requires --hours and --out");
+  if (command === "score") {
+    await scoreDir(flags);
+    return;
+  }
+  if (command === "supervise") {
+    if (!flags.out) throw new Error("supervise requires --out and --hours or --minutes");
+    await supervise({
+      outDir: flags.out,
+      chains: chainList(flags.chains).join(","),
+      hours: flags.hours ? Number(flags.hours) : 0,
+      minutes: flags.minutes ? Number(flags.minutes) : 0,
+      keepAll: Boolean(flags["keep-all"]),
+      runId: flags["run-id"],
+    });
+    return;
+  }
+  if (command !== "live" && command !== "engine") throw new Error(`Unknown command ${command}`);
+  if (!flags.out) throw new Error("engine requires --out and --hours or --minutes");
   const chains = chainList(flags.chains);
   const configs = loadConfigs({ gates: flags.gates, exits: flags.exits, fees: flags.fees });
   const logger = createLogger();
   await runLive({
     outDir: flags.out,
-    hours: Number(flags.hours),
+    hours: liveHours(flags),
     chains,
     configs,
     logger,
     keepAll: Boolean(flags["keep-all"]),
     runId: flags["run-id"],
+    scoreAtEnd: command === "live" && Boolean(flags["score-inline"]),
   });
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+const isMain = invokedDirectly();
+if (isMain) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
 
 export { args, chainList };

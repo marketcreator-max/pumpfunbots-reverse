@@ -177,7 +177,7 @@ function networkUsd(tr, fees, chain) {
   return Number(fees.networkFeeLamports) / 1e9 * (tr.solUsd ?? 0);
 }
 
-export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain, walletIndex, thresholds, supplyRaw, decimals, fees }) {
+export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain, walletIndex, thresholds, supplyRaw, decimals, fees, windowComplete = true }) {
   const book = createBook({ chain, create, thresholds, walletIndex });
   const rules = (spec.rules ?? []).map((rule) => ({ ...rule, done: false, checked: false, extend: false, arms: { armed: false, peak: 0, current: 0, snap: null } }));
   const byId = new Map(rules.map((rule) => [rule.id, rule]));
@@ -306,19 +306,42 @@ export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain
     const s = stateAt(tr, tr.recvTs - entry.recvTs);
     fireRules(tr, s);
   }
-  if (remaining > 0n && last) {
+  let incomplete = false;
+  if (remaining > 0n && !windowComplete) {
+    const mid = last ? midOf(last, chain) : entry.spotUsd;
+    if (mid == null) {
+      return {
+        pnlUsd: null,
+        exitMultiple: null,
+        peakMultiple: entry.effectiveUsdPerToken > 0 && peakMid != null ? peakMid / entry.effectiveUsdPerToken : null,
+        kept2x: false,
+        stale: false,
+        incomplete: true,
+        reason: "incomplete",
+        slices,
+        sells,
+        proceedsUsd: null,
+      };
+    }
+    const human = Number(remaining) / 10 ** decimals;
+    proceeds += human * mid;
+    incomplete = true;
+    reason = "mark";
+    remaining = 0n;
+  } else if (remaining > 0n && last) {
     sell(100, "horizon", last, true);
   }
   const stale = reason === "horizon" && horizonRecvTs - closeRecv > 5000;
-  const exitMultiple = entry.notionalUsd > 0 ? proceeds / entry.notionalUsd : 0;
+  const exitMultiple = entry.notionalUsd > 0 ? proceeds / entry.notionalUsd : null;
   const pnlUsd = proceeds - entry.notionalUsd - network;
   const peakMultiple = entry.effectiveUsdPerToken > 0 && peakMid != null ? peakMid / entry.effectiveUsdPerToken : 0;
   return {
     pnlUsd,
     exitMultiple,
     peakMultiple,
-    kept2x: exitMultiple >= 2,
+    kept2x: exitMultiple != null && exitMultiple >= 2,
     stale,
+    incomplete,
     reason,
     slices,
     sells,

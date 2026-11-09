@@ -1,7 +1,8 @@
-import { PYTH_SOL_USD_ID } from "./constants.mjs";
 import { redact } from "./redact.mjs";
 
 const CACHE_MS = 10_000;
+const COINBASE_SOL = "https://api.coinbase.com/v2/prices/SOL-USD/spot";
+const JUPITER_SOL = "https://api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112";
 const COINBASE_ETH = "https://api.coinbase.com/v2/prices/ETH-USD/spot";
 const DEX_ETH = "https://api.dexscreener.com/latest/dex/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
@@ -21,18 +22,7 @@ export function createPriceFeed({ fetchImpl = globalThis.fetch, now = () => Date
   async function solUsd() {
     if (sol && now() - sol.at < CACHE_MS) return { ...sol, stale: false };
     try {
-      const body = await readJson(fetchImpl, `https://hermes.pyth.network/v2/updates/price/latest?ids[]=0x${PYTH_SOL_USD_ID}`, signal());
-      const price = body.parsed?.[0]?.price;
-      const usd = price ? Number(price.price) * 10 ** Number(price.expo) : NaN;
-      if (usd > 0) {
-        sol = { usd, at: now(), source: "pyth" };
-        return { ...sol, stale: false };
-      }
-    } catch (error) {
-      log.warn(`sol price pyth failed: ${redact(error.message)}`);
-    }
-    try {
-      const body = await readJson(fetchImpl, "https://api.coinbase.com/v2/prices/SOL-USD/spot", signal());
+      const body = await readJson(fetchImpl, COINBASE_SOL, signal());
       const usd = Number(body.data?.amount);
       if (usd > 0) {
         sol = { usd, at: now(), source: "coinbase" };
@@ -42,7 +32,7 @@ export function createPriceFeed({ fetchImpl = globalThis.fetch, now = () => Date
       log.warn(`sol price coinbase failed: ${redact(error.message)}`);
     }
     try {
-      const body = await readJson(fetchImpl, "https://lite-api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112", signal());
+      const body = await readJson(fetchImpl, JUPITER_SOL, signal());
       const row = body.data?.So11111111111111111111111111111111111111112;
       const usd = Number(row?.price);
       if (usd > 0) {

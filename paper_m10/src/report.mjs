@@ -26,8 +26,16 @@ export function aggregateRows(scored, exits, gateList) {
       const at = (delay) => mine.filter((row) => row.delayMs === delay);
       const primary = at(delays[0]);
       const slow = at(delays[1]);
-      const sum = (list) => roundUsd(list.reduce((total, row) => total + (row.pnlUsd ?? 0), 0));
-      const worst = primary.reduce((pick, row) => (pick == null || row.pnlUsd < pick.pnlUsd ? row : pick), null);
+      const sum = (list) => {
+        const valued = list.filter((row) => row.pnlUsd != null);
+        if (!valued.length) return null;
+        return roundUsd(valued.reduce((total, row) => total + row.pnlUsd, 0));
+      };
+      const worst = primary.reduce((pick, row) => {
+        if (row.pnlUsd == null) return pick;
+        if (pick == null || row.pnlUsd < pick.pnlUsd) return row;
+        return pick;
+      }, null);
       const biggest = primary.reduce((pick, row) => (pick == null || row.peakMultiple > pick.peakMultiple ? row : pick), null);
       rows.push({
         gate: gateId,
@@ -76,6 +84,20 @@ export function buildReport({ identity, scored, exits, gates, north }) {
   lines.push(`# paper_m10 ${identity.chain}`);
   lines.push("");
   lines.push(`Chain \`${identity.chain}\` / chain_id \`${identity.chain_id}\`. strategy_version \`${identity.strategy_version}\`. run_id \`${identity.run_id}\`.`);
+  const validity = north?.validity;
+  if (validity) {
+    lines.push("");
+    lines.push(validity.valid
+      ? `Run status: VALID. Decided tokens ${validity.decided}, incomplete windows ${validity.incomplete}, gap ${Math.round((validity.gapMs ?? 0) / 1000)}s.`
+      : `Run status: INVALID. ${validity.reasons.join("; ")}.`);
+    if (north.gaps?.length) {
+      lines.push("");
+      lines.push("Gaps:");
+      for (const gap of north.gaps) {
+        lines.push(`- ${new Date(gap.start).toISOString()} to ${new Date(gap.end).toISOString()} (${Math.round(gap.ms / 1000)}s, ${gap.reason})`);
+      }
+    }
+  }
   lines.push("");
   lines.push("## Rug bots vs nurture bots");
   lines.push("");
@@ -145,7 +167,7 @@ export function buildReport({ identity, scored, exits, gates, north }) {
   lines.push("| gate | exit | entries | rugs entered | runners ≥2x | runners ≥5x | runners kept ≥2x | biggest runner | peak x | our x | P&L 2s | P&L 3s | worst trade |");
   lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |");
   for (const row of rows) {
-    const worst = row.worstName ? `${cell(row.worstName)} ${money(row.worstPnl)}` : "";
+    const worst = row.worstName ? `${cell(row.worstName)} ${row.worstPnl == null ? "INCOMPLETE" : money(row.worstPnl)}` : "";
     lines.push(`| ${row.gate} | ${cell(row.exit)} | ${row.entries} | ${row.rugsEntered} | ${row.runners2x} | ${row.runners5x} | ${row.runnersKept} | ${cell(row.biggestName)} | ${num(row.peakMultiple, 2)} | ${num(row.ourMultiple, 2)} | ${money(row.pnl2s)} | ${money(row.pnl3s)} | ${worst} |`);
   }
   lines.push("");

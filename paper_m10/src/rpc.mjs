@@ -1,6 +1,8 @@
+import WebSocket from "ws";
 import { PUBLIC_ENDPOINTS } from "./constants.mjs";
 import { redact } from "./redact.mjs";
 import { backoffMs } from "./util.mjs";
+import { SILENCE_MS } from "./watchdog.mjs";
 
 export function resolveSolEndpoints(env = process.env) {
   if (env.RPC_URL) {
@@ -38,6 +40,19 @@ export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, lo
   let stopped = false;
   let timer = null;
   const sockets = new Set();
+  let lastRx = Date.now();
+
+  const beat = setInterval(() => {
+    if (stopped) return;
+    const sock = [...sockets].at(-1);
+    if (!sock || sock.readyState !== 1) return;
+    if (Date.now() - lastRx >= SILENCE_MS) {
+      logger?.warn("sol feed silence 20s, forcing reconnect");
+      try { sock.close(); } catch { /* already closing */ }
+      return;
+    }
+    try { sock.ping(); } catch { /* socket is closing */ }
+  }, 10_000);
 
   const open = () => {
     if (stopped) return;
@@ -46,8 +61,10 @@ export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, lo
     let sawClose = false;
     const socket = new WebSocket(url);
     sockets.add(socket);
+    socket.on("pong", () => { lastRx = Date.now(); });
     socket.addEventListener("open", () => {
       opened = true;
+      lastRx = Date.now();
       attempt = 0;
       onStatus?.({ state: "open" });
       let id = 1;
@@ -61,6 +78,7 @@ export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, lo
       }
     });
     socket.addEventListener("message", (event) => {
+      lastRx = Date.now();
       let message;
       try {
         message = JSON.parse(event.data);
@@ -92,8 +110,18 @@ export function subscribeSolLogs({ wsUrl, wsUrls, mentions, onLogs, onStatus, lo
   };
   open();
   return {
+    noteActivity() {
+      lastRx = Date.now();
+    },
+    forceReconnect() {
+      logger?.warn("sol feed forced reconnect");
+      for (const sock of sockets) {
+        try { sock.close(); } catch { /* ignore */ }
+      }
+    },
     stop() {
       stopped = true;
+      clearInterval(beat);
       if (timer) clearTimeout(timer);
       for (const sock of sockets) {
         try { sock.close(); } catch { /* ignore */ }
