@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { scoreTape } from "../src/score.mjs";
 import { configs, identity, solCreate, solTrade, watch, T0 } from "./helpers.mjs";
-import { createSocials, spk1Reason } from "../src/spikecalls.mjs";
+import { SPIKE, createSocials, spk1Reason } from "../src/spikecalls.mjs";
 import { openEntry, simulateExit } from "../src/exits.mjs";
 import { WalletIndex } from "../src/classify.mjs";
 
@@ -167,6 +167,47 @@ test("DexScreener socials are cached, rate-limited, and abstain on failure", asy
   assert.equal(calls, 2);
   assert.equal(failed.abstain, true);
   assert.ok(waits.some((ms) => ms >= 1000));
+});
+
+test("more than three overlapping passes each get a $100 entry", () => {
+  assert.equal(SPIKE.maxConcurrentPositions, null);
+  const events = [];
+  const supply = 1_000_000_000_000_000n;
+  const reserves = { virtualSol: 500_000_000_000n, virtualToken: supply, realSol: 200_000_000_000n, realToken: supply / 2n };
+  for (let n = 0; n < 5; n++) {
+    const mint = `Gate${n}`;
+    events.push(solCreate({ mint, name: mint, symbol: mint, totalSupply: supply, ...reserves }));
+    events.push(solTrade({
+      mint, recvTs: T0 + 60_000, slot: 20 + n, signer: `B${n}`,
+      solLamports: 200_000_000_000n, solUsd: 100, signature: `vol-${n}`, ...reserves,
+    }));
+    events.push(watch(mint, T0 + 600_000));
+    events.push(solTrade({
+      mint, recvTs: T0 + 602_500, slot: 80 + n, signer: `F${n}`,
+      solLamports: 1_000_000_000n, solUsd: 100, signature: `gfill-${n}`, ...reserves,
+    }));
+  }
+  for (let n = 0; n < 4; n++) {
+    const minted = burst();
+    const mint = `Spike${n}`;
+    for (const event of minted.events) {
+      event.mint = mint;
+      if (event.name) event.name = mint;
+      if (event.symbol) event.symbol = mint;
+    }
+    minted.events.push(solTrade({
+      mint, recvTs: T0 + 35 * 60_000, slot: 960 + n, signer: "Fill",
+      side: "buy", solLamports: 1_000_000_000n, solUsd: 100, solUsdAt: T0,
+      signature: `sfill-${n}`, ...minted.reserves,
+    }));
+    events.push(...minted.events);
+  }
+  const result = scoreTape(events, { ...configs(), chain: "SOL", runId: "test-run" });
+  const g3 = result.scored.filter((row) => row.gateId === "G3" && row.exitId === "H10" && row.delayMs === 2000 && row.filled);
+  const spk = result.scored.filter((row) => row.gateId === "SPK1" && row.exitId === "H10" && row.delayMs === 2000 && row.filled);
+  assert.equal(new Set(g3.map((row) => row.mint)).size, 5);
+  assert.equal(new Set(spk.map((row) => row.mint)).size, 4);
+  for (const row of [...g3, ...spk]) assert.equal(row.notionalUsd, 100);
 });
 
 test("volume decay uses the 1h tape proxy and the 24h hold stays incomplete", () => {

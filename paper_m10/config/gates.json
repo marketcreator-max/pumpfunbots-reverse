@@ -39,7 +39,7 @@
       "id": "SPK1",
       "mode": "spike",
       "chains": ["SOL", "HOOD"],
-      "note": "Tape only: age 10m-6h, liquidity >= $8k, 1h volume >= $15k, mcap $25k-$5M, >=120 trades in the last hour, sells/buys >= 0.15. Source SpikeCalls c0f226a. SPK4 is disabled."
+      "note": "Tape only: age 10m-6h, liquidity >= $8k, 1h volume >= $15k, mcap $25k-$5M, >=120 trades in the last hour, sells/buys >= 0.15. Source SpikeCalls c0f226a. SPK4 is disabled. SpikeCalls' max of 3 concurrent positions is ignored for SPK and G* gates: every pass is a $100 entry."
     },
     {
       "id": "SPK2",

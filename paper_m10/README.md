@@ -44,7 +44,7 @@ node src/cli.mjs replay --tape /root/botwatch/m10_server/run3/SOL/tape.jsonl --o
 
 Gates `G0`, `G3`, `G3F`, `G3N`, and SpikeCalls `SPK1`–`SPK3` are in `config/gates.json`. `SPK4` (the paid Claude score) is not implemented. `SPK1` is tape-only and runs on SOL and HOOD from minute 10 through hour 6, entering once. `SPK2` adds SOL mint, freeze, and real-holder checks and is N/A on HOOD. `SPK3` adds a keyless DexScreener social lookup and abstains if that lookup is missing or fails. Replay never calls RPC or DexScreener; those checks abstain unless the tape already has them.
 
-SpikeCalls exits are `SPK -35% stop`, `SPK half at 2x`, `SPK volume decay` (last-15-minute tape proxy for the 6h/24h pace), and `SPK 24h hold`. The 24-hour hold is marked at the last price and flagged `INCOMPLETE` when the tape ends first.
+SpikeCalls exits are `SPK -35% stop`, `SPK half at 2x`, `SPK volume decay` (last-15-minute tape proxy for the 6h/24h pace), and `SPK 24h hold`. The 24-hour hold is marked at the last price and flagged `INCOMPLETE` when the tape ends first. SpikeCalls' max of 3 concurrent positions is not applied. Every G* and SPK pass is its own $100 entry, and those holds overlap with no book limit.
 
 Gates `G0`, `G3`, `G3F`, and `G3N` stay the minute-10 gates. Exits are in `config/exits.json` and include the 20 research exits plus the house set: BOT (1.5x / 0.7x / 300s), H10, T30, TP2x+trail, TP5x+trail, 5m, and 15m. Each one is filled at 2 seconds and at 3 seconds.
 

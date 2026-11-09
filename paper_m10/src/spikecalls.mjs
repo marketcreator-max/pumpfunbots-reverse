@@ -21,6 +21,9 @@ export const SPIKE = Object.freeze({
   volumeDecayRatio: 0.2,
   volumeDecayMinMinutes: 30,
   maxHoldHours: 24,
+  // SpikeCalls refused a new entry when 3 positions were already open.
+  // That rule is not used. Null means every pass is entered.
+  maxConcurrentPositions: null,
 });
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";

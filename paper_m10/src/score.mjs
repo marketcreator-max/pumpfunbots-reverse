@@ -251,6 +251,8 @@ export function scoreTape(rawEvents, cfg) {
     };
     tokenRows.push(token);
 
+    // One $100 entry per passing gate. Holds overlap with no book limit,
+    // including SpikeCalls' max of 3 concurrent positions, which is ignored.
     for (const decision of decs.filter((row) => row.pass)) {
       for (const delay of cfg.fees.entryDelayMs) {
         const decisionAt = decision.decidedAtRecvTs ?? minute10.cutoffRecvTs;
@@ -307,6 +309,7 @@ export function scoreTape(rawEvents, cfg) {
             name: minute10.name,
             symbol: minute10.symbol,
             filled: true,
+            notionalUsd: entry.notionalUsd,
             incomplete: Boolean(sim.incomplete),
             pnlUsd: roundUsd(sim.pnlUsd),
             exitMultiple: roundUsd(sim.exitMultiple),
