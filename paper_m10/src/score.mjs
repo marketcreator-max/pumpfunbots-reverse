@@ -18,6 +18,7 @@ import {
 } from "./outcome.mjs";
 import { buildReport } from "./report.mjs";
 import { assessRun, sumGaps } from "./watchdog.mjs";
+import { firstSpikePasses, spikeDecisions } from "./spikecalls.mjs";
 
 function midOf(tr, chain) {
   if (chain === "HOOD") return tr.priceUsd ?? null;
@@ -58,7 +59,7 @@ export function scoreTape(rawEvents, cfg) {
   const mints = new Map();
   for (const event of events) {
     if (event.type === "create") {
-      if (!mints.has(event.mint)) mints.set(event.mint, { create: event, trades: [], watches: [] });
+      if (!mints.has(event.mint)) mints.set(event.mint, { create: event, trades: [], watches: [], facts: [], socials: [] });
       else if (!mints.get(event.mint).create.name && event.name) mints.get(event.mint).create = { ...mints.get(event.mint).create, ...event };
     } else if (event.type === "trade" && event.mint) {
       const mint = mints.get(event.mint);
@@ -67,6 +68,10 @@ export function scoreTape(rawEvents, cfg) {
       index.add(event.signer, event.mint, event.recvTs);
     } else if (event.type === "watch") {
       mints.get(event.mint)?.watches.push(event.recvTs);
+    } else if (event.type === "solFacts") {
+      mints.get(event.mint)?.facts.push(event);
+    } else if (event.type === "socials") {
+      mints.get(event.mint)?.socials.push(event);
     }
   }
 
@@ -107,6 +112,22 @@ export function scoreTape(rawEvents, cfg) {
     }
     if (!minute10) continue;
     const decs = evaluateGates(minute10, { ...cfg, chain: cfg.chain, runId: cfg.runId });
+    const spike = firstSpikePasses({
+      trades: state.trades,
+      create: state.create,
+      facts: state.facts,
+      socials: state.socials,
+      chain: cfg.chain,
+      supply,
+      decimals,
+    });
+    decs.push(...spikeDecisions({
+      identity,
+      create: state.create,
+      passes: spike.passes,
+      reasons: spike.reasons,
+      configHash: cfg.gatesHash,
+    }));
     decisions.push(...decs);
     wallets.push(...walletRows(labels10, { identity, mint, name: minute10.name, cutoff: minute10.cutoffRecvTs }));
 
@@ -232,9 +253,11 @@ export function scoreTape(rawEvents, cfg) {
 
     for (const decision of decs.filter((row) => row.pass)) {
       for (const delay of cfg.fees.entryDelayMs) {
+        const decisionAt = decision.decidedAtRecvTs ?? minute10.cutoffRecvTs;
+        const spikeEntry = decision.gateMode === "spike";
         const entry = openEntry({
           trades: state.trades,
-          decisionRecvTs: minute10.cutoffRecvTs,
+          decisionRecvTs: decisionAt,
           delayMs: delay,
           fees: cfg.fees,
           chain: cfg.chain,
@@ -245,27 +268,32 @@ export function scoreTape(rawEvents, cfg) {
           scored.push({ ...identity, gateId: decision.gateId, delayMs: delay, mint, name: minute10.name, symbol: minute10.symbol, filled: false });
           continue;
         }
+        const lastTs = state.trades.length ? state.trades[state.trades.length - 1].recvTs : decisionAt;
+        const exitHorizon = spikeEntry ? decisionAt + 24 * 3_600_000 : horizon;
         const stats = pathStats({
           trades: state.trades,
           entry,
-          horizonRecvTs: horizon,
+          horizonRecvTs: exitHorizon,
           chain: cfg.chain,
           entryReserve: entry.trade.virtualSol ?? 0n,
         });
         for (const exit of cfg.exits.exits) {
+          const complete = spikeEntry
+            ? lastTs >= entry.recvTs + (exit.incompleteUnlessHoldHours ?? 24) * 3_600_000
+            : observed;
           const sim = simulateExit({
             spec: exit,
             trades: state.trades,
             create: state.create,
             entry,
-            horizonRecvTs: horizon,
+            horizonRecvTs: exitHorizon,
             chain: cfg.chain,
             walletIndex: index,
             thresholds: cfg.classify,
             supplyRaw: supply ?? 0n,
             decimals,
             fees: cfg.fees,
-            windowComplete: observed,
+            windowComplete: complete,
           });
           scored.push({
             ...identity,

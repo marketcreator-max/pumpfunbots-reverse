@@ -359,6 +359,51 @@
           }
         }
       ]
+    },
+    {
+      "id": "SPK_STOP35",
+      "label": "SPK -35% stop",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "SpikeCalls stop: sell all at -35% from entry.",
+      "rules": [
+        { "id": "stop", "sellPctOfOriginal": 100, "when": { "kind": "stop", "multipleLte": 0.65 } }
+      ]
+    },
+    {
+      "id": "SPK_HALF2X",
+      "label": "SPK half at 2x",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "SpikeCalls take profit: sell half once at 2x. The rest stays open.",
+      "rules": [
+        { "id": "half", "sellPctOfOriginal": 50, "when": { "kind": "multiple", "gte": 2 } }
+      ]
+    },
+    {
+      "id": "SPK_VOL",
+      "label": "SPK volume decay",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "After 30 minutes, sell all when the last 15 minutes are under 0.20 of the last-hour pace. That is the h1 tape proxy for h6/(h24/4).",
+      "rules": [
+        { "id": "decay", "sellPctOfOriginal": 100, "when": { "kind": "volumeDecay", "ratio": 0.2, "afterSec": 1800 } }
+      ]
+    },
+    {
+      "id": "SPK_HOLD24",
+      "label": "SPK 24h hold",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "incompleteUnlessHoldHours": 24,
+      "note": "SpikeCalls max hold is 24 hours. If the tape ends first, the position is marked at the last price and flagged INCOMPLETE.",
+      "rules": [
+        { "id": "hold", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 86400 } }
+      ]
     }
   ]
 }

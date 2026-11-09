@@ -43,6 +43,7 @@ export function evaluateGates(feature, cfg) {
   const identity = identityFor(cfg.chain, cfg.runId);
   const decisions = [];
   for (const gate of cfg.gates.gates) {
+    if (gate.mode === "spike") continue;
     let pass = false;
     let reason = "";
     if ((feature.tradeCount ?? 0) < 1) {

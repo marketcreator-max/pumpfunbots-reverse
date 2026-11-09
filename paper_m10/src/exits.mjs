@@ -1,9 +1,11 @@
 import { labelBook, noteTrade, createBook, windowMix } from "./classify.mjs";
 import { constantProductBuy, constantProductSell, spotUsdPerToken } from "./fill.mjs";
+import { tradeUsd } from "./spikecalls.mjs";
 
 const KINDS = new Set([
   "time", "multiple", "stop", "mcMultiple", "mcUsd", "nurtureFlip", "blatantSurge",
   "realBuyerDry", "liquidityPull", "bigSeller", "trail", "any", "all", "combo", "nurtureDominant",
+  "volumeDecay",
 ]);
 
 function walkKinds(when, visit) {
@@ -65,6 +67,10 @@ function whenTrue(when, s) {
       return s.liqPull;
     case "bigSeller":
       return s.bigSell;
+    case "volumeDecay":
+      return s.elapsedMs >= (when.afterSec ?? 1800) * 1000
+        && s.volDecayRatio != null
+        && s.volDecayRatio < when.ratio;
     case "trail":
       return false;
     case "any":
@@ -180,6 +186,12 @@ function networkUsd(tr, fees, chain) {
 export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain, walletIndex, thresholds, supplyRaw, decimals, fees, windowComplete = true }) {
   const book = createBook({ chain, create, thresholds, walletIndex });
   const rules = (spec.rules ?? []).map((rule) => ({ ...rule, done: false, checked: false, extend: false, arms: { armed: false, peak: 0, current: 0, snap: null } }));
+  let needVolume = false;
+  for (const rule of rules) walkKinds(rule.when, (when) => { if (when.kind === "volumeDecay") needVolume = true; });
+  const volBase = [];
+  const volRecent = [];
+  let baseUsd = 0;
+  let recentUsd = 0;
   const byId = new Map(rules.map((rule) => [rule.id, rule]));
   let remaining = entry.tokensOut;
   const original = entry.tokensOut;
@@ -227,6 +239,7 @@ export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain
       msSinceNewReal: tr.recvTs - lastNewReal,
       liqPull,
       bigSell,
+      volDecayRatio: baseUsd > 0 ? recentUsd / (baseUsd / 4) : null,
     };
   }
 
@@ -287,6 +300,17 @@ export function simulateExit({ spec, trades, create, entry, horizonRecvTs, chain
   let last = null;
   for (const tr of trades) {
     if (tr.recvTs > horizonRecvTs) break;
+    if (needVolume) {
+      const usd = tradeUsd(tr);
+      volBase.push({ t: tr.recvTs, usd });
+      volRecent.push({ t: tr.recvTs, usd });
+      baseUsd += usd;
+      recentUsd += usd;
+      const baseCut = tr.recvTs - 3_600_000;
+      const recentCut = tr.recvTs - 15 * 60_000;
+      while (volBase.length && volBase[0].t < baseCut) baseUsd -= volBase.shift().usd;
+      while (volRecent.length && volRecent[0].t < recentCut) recentUsd -= volRecent.shift().usd;
+    }
     noteTrade(book, tr);
     if (tr.side === "buy" && tr.signer) {
       const label = labelBook(book).get(tr.signer);

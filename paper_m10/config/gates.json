@@ -1,5 +1,5 @@
 {
-  "version": "gates-v1",
+  "version": "gates-v2",
   "gates": [
     {
       "id": "G0",
@@ -34,6 +34,24 @@
         { "feat": "nurtureShareLast60", "gte": 50 },
         { "feat": "blatantShareLast60", "lt": 50 }
       ]
+    },
+    {
+      "id": "SPK1",
+      "mode": "spike",
+      "chains": ["SOL", "HOOD"],
+      "note": "Tape only: age 10m-6h, liquidity >= $8k, 1h volume >= $15k, mcap $25k-$5M, >=120 trades in the last hour, sells/buys >= 0.15. Source SpikeCalls c0f226a. SPK4 is disabled."
+    },
+    {
+      "id": "SPK2",
+      "mode": "spike",
+      "chains": ["SOL"],
+      "note": "SPK1 plus SOL RPC: mint and freeze authority revoked, top real wallet <= 5%, top 10 real wallets <= 25%, curve and pool excluded. Abstains in replay when those facts are not on the tape. N/A on HOOD."
+    },
+    {
+      "id": "SPK3",
+      "mode": "spike",
+      "chains": ["SOL", "HOOD"],
+      "note": "SPK2 on SOL, or SPK1 on HOOD, plus a free DexScreener X or Telegram link. Abstains when the lookup fails or is absent from the tape. No API key."
     }
   ]
 }

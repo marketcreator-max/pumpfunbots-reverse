@@ -35,13 +35,18 @@ Quotes are the HOOD addresses for WETH, aeWETH, USDC, USDG, and USDT. Stables ar
 
 ```bash
 node src/cli.mjs replay --tape out/run1/SOL/tape.jsonl --out out/replay --chain SOL
+node src/cli.mjs replay --tape /root/botwatch/m10_server/run3/SOL/tape.jsonl --out out/spk-replay --chain SOL
 ```
 
 `--gates` and `--exits` point at replacement JSON. The same tape and configs score to the same report. SOL mints that fail every gate are dropped at minute 10, so a looser gate cannot see their later path. `--keep-all` keeps every mint for the full hour.
 
 ## What is scored
 
-Gates `G0`, `G3`, `G3F`, and `G3N` are in `config/gates.json`. Exits are in `config/exits.json` and include the 20 research exits plus the house set: BOT (1.5x / 0.7x / 300s), H10, T30, TP2x+trail, TP5x+trail, 5m, and 15m. Each one is filled at 2 seconds and at 3 seconds.
+Gates `G0`, `G3`, `G3F`, `G3N`, and SpikeCalls `SPK1`–`SPK3` are in `config/gates.json`. `SPK4` (the paid Claude score) is not implemented. `SPK1` is tape-only and runs on SOL and HOOD from minute 10 through hour 6, entering once. `SPK2` adds SOL mint, freeze, and real-holder checks and is N/A on HOOD. `SPK3` adds a keyless DexScreener social lookup and abstains if that lookup is missing or fails. Replay never calls RPC or DexScreener; those checks abstain unless the tape already has them.
+
+SpikeCalls exits are `SPK -35% stop`, `SPK half at 2x`, `SPK volume decay` (last-15-minute tape proxy for the 6h/24h pace), and `SPK 24h hold`. The 24-hour hold is marked at the last price and flagged `INCOMPLETE` when the tape ends first.
+
+Gates `G0`, `G3`, `G3F`, and `G3N` stay the minute-10 gates. Exits are in `config/exits.json` and include the 20 research exits plus the house set: BOT (1.5x / 0.7x / 300s), H10, T30, TP2x+trail, TP5x+trail, 5m, and 15m. Each one is filled at 2 seconds and at 3 seconds.
 
 On HOOD, dev holding and same-slot bundle are `N/A`. They are not filled in with zeros, so `G3F` and `G3N` fail closed.
 
