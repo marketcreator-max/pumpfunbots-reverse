@@ -1,0 +1,344 @@
+{
+  "chain": "HOOD",
+  "chain_name": "Robinhood Chain",
+  "chain_id": 4663,
+  "chain_id_hex": "0x1237",
+  "chain_id_hex_note": "Brief asked eth_chainId==0x123f; actual 4663==0x1237. All public RPCs return 0x1237.",
+  "native_gas": "ETH",
+  "scope_note": "Read-only lookup of pre-Nov-6 BRRR HOOD sources from box archives + research-server multiwatch/newrun2. Secrets not read. No changes to running systems.",
+  "rpc_env_vars": [
+    {
+      "name": "ALCHEMY_API_KEY",
+      "also": [
+        "ALCHEMY_KEY"
+      ],
+      "usage": "Multiwatch prepends https://robinhood-mainnet.g.alchemy.com/v2/<key> for eth_getLogs; value from EnvironmentFile providers.env (not read).",
+      "evidence": "/root/multiwatch_20261103/mw.py:27-38"
+    },
+    {
+      "name": "ALCHEMY_RH_RPC_URL",
+      "usage": "FOMO_ALPHA / BirthRadar RH confirm full RPC URL (key embedded -> REDACTED if printed).",
+      "evidence": "/workspace/FOMO_ALPHA/intelligence/birthradar/intakes/alchemy_rh_confirm.py:48-58"
+    },
+    {
+      "name": "ALCHEMY_API_KEY",
+      "usage": "grok_jev / new_launches constructs https://robinhood-mainnet.g.alchemy.com/v2/{ALCHEMY_API_KEY}",
+      "evidence": "/workspace/grok_jev_early_exp_wallet_only_1h_20260923/new_launches.py:56-65"
+    },
+    {
+      "name": "secret_file_rh_rpc_url",
+      "path_declared_not_read": "connector-secrets/alchemy/rh_rpc_url",
+      "usage": "Preferred full Alchemy RH HTTP URL when present; never commit/log.",
+      "evidence": "ALCHEMY_CHAINS.md + alchemy_rh_confirm.py:28,49-55"
+    },
+    {
+      "name": "NR2_V4_STATEVIEW_robinhood",
+      "usage": "Opt-in Uniswap v4 StateView address or literal 'official'.",
+      "evidence": "/root/newrun2_20261104/nr2/nr2_evm_impact.py:17-22"
+    }
+  ],
+  "rpc_public": [
+    {
+      "url": "https://rpc.mainnet.chain.robinhood.com",
+      "eth_chainId": "0x1237",
+      "works": true,
+      "sources": [
+        "mw.py EVM[robinhood]",
+        "new_launches.PUBLIC_RH_RPC",
+        "SOURCE_MANIFEST_HOOD.md"
+      ]
+    },
+    {
+      "url": "https://robinhood-rpc.publicnode.com",
+      "eth_chainId": "0x1237",
+      "works": true,
+      "sources": [
+        "mw.py EVM[robinhood]",
+        "SOURCE_MANIFEST_HOOD.md"
+      ]
+    },
+    {
+      "url": "https://robinhood.drpc.org",
+      "eth_chainId": "0x1237",
+      "works": true,
+      "sources": [
+        "mw.py EVM[robinhood]",
+        "SOURCE_MANIFEST_HOOD.md"
+      ]
+    }
+  ],
+  "rpc_alchemy_template_no_key": "https://robinhood-mainnet.g.alchemy.com/v2/REDACTED",
+  "ws_public": [],
+  "ws_notes": [
+    "BRRR multiwatch HOOD path is HTTP eth_getLogs polling only; no public HOOD WS URL hardcoded.",
+    "Alchemy WS template (keyed, not public): wss://robinhood-mainnet.g.alchemy.com/v2/REDACTED \u2014 inferred from HTTP host pattern; not present as a public constant in multiwatch.",
+    "FOMO_WS wss://api.fomoapi.io/ws/alerts is a FOMO alert feed, not a HOOD chain RPC WS."
+  ],
+  "factories": [
+    {
+      "address": "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
+      "type": "univ3",
+      "role": "Uniswap V3 PoolCreated soft-seed factory used by grok_jev HOOD launch watcher (pre-Nov6 research tree on box).",
+      "event_abis": [
+        {
+          "name": "PoolCreated",
+          "signature": "PoolCreated(address,address,uint24,int24,address)",
+          "topic0": "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118",
+          "indexed": [
+            "token0",
+            "token1",
+            "fee"
+          ],
+          "data": [
+            "tickSpacing",
+            "pool"
+          ]
+        }
+      ],
+      "quote_tokens": [
+        {
+          "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+          "symbol": "USDG",
+          "decimals": 6
+        },
+        {
+          "address": "0x4200000000000000000000000000000000000006",
+          "symbol": "WETH",
+          "decimals": 18
+        },
+        {
+          "address": "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
+          "symbol": "aeWETH",
+          "decimals": 18
+        }
+      ],
+      "evidence": [
+        "/workspace/grok_jev_early_exp_wallet_only_1h_20260923/new_launches.py:29-40,49,137-138",
+        "/workspace/grok_jev_early_exp_wallet_only_1h_20260923/run_experiment.py:301"
+      ]
+    },
+    {
+      "address": null,
+      "type": "univ2",
+      "role": "No HOOD Uniswap V2 factory address hardcoded in multiwatch or grok_jev. Multiwatch classifies enrolled pools as kind=v2v3 and listens for UniV2 Swap topic on the pool address itself (GT/DexScreener discovery, not PairCreated).",
+      "event_abis": [
+        {
+          "name": "Swap",
+          "signature": "Swap(address,uint256,uint256,uint256,uint256,address)",
+          "topic0": "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822",
+          "code_const": "T_V2",
+          "evidence": "/root/multiwatch_20261103/mw.py:38,373-378"
+        },
+        {
+          "name": "PairCreated",
+          "signature": "PairCreated(address,address,address,uint256)",
+          "topic0": "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9",
+          "note": "Keccak-verified standard UniV2 topic; NOT referenced in multiwatch HOOD path."
+        }
+      ],
+      "quote_tokens": [],
+      "evidence": [
+        "/root/multiwatch_20261103/mw.py:38,298,462-465"
+      ]
+    },
+    {
+      "address": null,
+      "type": "univ3",
+      "role": "Multiwatch HOOD swap tape: UniV3/PancakeV3 Swap topics on enrolled pool addresses (discovery via GeckoTerminal networks/robinhood/new_pools + DexScreener, not factory PoolCreated).",
+      "event_abis": [
+        {
+          "name": "Swap",
+          "signature": "Swap(address,address,int256,int256,uint160,uint128,int24)",
+          "topic0": "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
+          "code_const": "T_V3",
+          "evidence": "/root/multiwatch_20261103/mw.py:39,379-380"
+        },
+        {
+          "name": "Swap",
+          "signature": "PancakeV3-family Swap (topic only in code)",
+          "topic0": "0x19b47279256b2a23a1665c810c8d55a1758940ee09377d4f8d26497a3577dc83",
+          "code_const": "T_PV3",
+          "evidence": "/root/multiwatch_20261103/mw.py:40,379"
+        }
+      ],
+      "quote_tokens": [
+        {
+          "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+          "symbol": "USDG",
+          "decimals": 6
+        },
+        {
+          "address": "0x80e0e24718dbfcad49ecaa6f1e6c89a190586ca8",
+          "symbol": "USDC",
+          "decimals": 6
+        },
+        {
+          "address": "0xe246bc49b0598d7cd9f0ead48b885034f1254380",
+          "symbol": "USDT",
+          "decimals": 6
+        },
+        {
+          "address": "0x4200000000000000000000000000000000000006",
+          "symbol": "WETH",
+          "decimals": 18
+        },
+        {
+          "address": "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
+          "symbol": "aeWETH",
+          "decimals": 18
+        }
+      ],
+      "evidence": [
+        "/root/multiwatch_20261103/mw.py:21,38-42,710",
+        "SOURCE_MANIFEST_HOOD.md:19"
+      ]
+    },
+    {
+      "address": "0xf3334192d15450cdd385c8b70e03f9a6bd9e673b",
+      "type": "univ3",
+      "role": "Uniswap v4 StateView (not a factory). Opt-in via NR2_V4_STATEVIEW_robinhood=official for reserve/impact helper only. Multiwatch also listens for v4/PINF Swap topics on poolId.",
+      "event_abis": [
+        {
+          "name": "Swap",
+          "signature": "Uniswap v4 / Pancake Infinity Swap family (topic as coded)",
+          "topic0": "0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f",
+          "code_const": "T_V4",
+          "evidence": "/root/multiwatch_20261103/mw.py:41,381-382,466-467"
+        },
+        {
+          "name": "Swap",
+          "signature": "Pancake Infinity-family (topic as coded)",
+          "topic0": "0x04206ad2b7c0f463bff3dd4f33c5735b0f2957a351e4f79763a4fa9e775dd237",
+          "code_const": "T_PINF",
+          "evidence": "/root/multiwatch_20261103/mw.py:42"
+        }
+      ],
+      "quote_tokens": [],
+      "evidence": [
+        "/root/newrun2_20261104/nr2/nr2_evm_impact.py:15-17",
+        "SOURCE_MANIFEST_HOOD.md:24"
+      ]
+    },
+    {
+      "address": null,
+      "type": "launchpad",
+      "role": "Pons / pools.trade documented as HOOD launchpads (Bitquery docs) but NOT_PROBED / no factory address bound in BRRR code before Nov 6.",
+      "event_abis": [],
+      "quote_tokens": [],
+      "evidence": [
+        "/workspace/botwatch/nr_paper_0_3_20261105/sources/SOURCE_MANIFEST_HOOD.md:27,38,43",
+        "/workspace/botwatch/nr_paper_0_3_20261105/SPECIFICATION_AND_ACCEPTANCE_TESTS.txt:109"
+      ]
+    }
+  ],
+  "quote_tokens_all": [
+    {
+      "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+      "symbol": "USDG",
+      "decimals": 6,
+      "role": "HOOD stable / known base"
+    },
+    {
+      "address": "0x80e0e24718dbfcad49ecaa6f1e6c89a190586ca8",
+      "symbol": "USDC",
+      "decimals": 6,
+      "role": "HOOD USDC"
+    },
+    {
+      "address": "0xe246bc49b0598d7cd9f0ead48b885034f1254380",
+      "symbol": "USDT",
+      "decimals": 6,
+      "role": "HOOD USDT"
+    },
+    {
+      "address": "0x4200000000000000000000000000000000000006",
+      "symbol": "WETH",
+      "decimals": 18,
+      "role": "HOOD WETH"
+    },
+    {
+      "address": "0x0bd7d308f8e1639fab988df18a8011f41eacad73",
+      "symbol": "aeWETH",
+      "decimals": 18,
+      "role": "HOOD aeWETH"
+    },
+    {
+      "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "symbol": "USDC",
+      "decimals": 6,
+      "role": "Ethereum mainnet USDC belt-and-suspenders in verify_hood"
+    },
+    {
+      "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "symbol": "USDT",
+      "decimals": 6,
+      "role": "Ethereum mainnet USDT belt-and-suspenders"
+    },
+    {
+      "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "symbol": "WETH",
+      "decimals": 18,
+      "role": "Ethereum WETH belt-and-suspenders / ETHUSD DexScreener lookup"
+    }
+  ],
+  "price_source": {
+    "eth_usd": {
+      "primary": "Coinbase spot https://api.coinbase.com/v2/prices/ETH-USD/spot",
+      "fallback": [
+        "DexScreener latest/dex/tokens/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 (USDC/USDT/DAI quote)",
+        "CoinGecko https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+      ],
+      "cache_s": 45,
+      "evidence": "/workspace/grok_jev_early_exp_wallet_only_1h_20260923/valuation.py:1071-1126",
+      "buy_usd_bases": [
+        "HOOD_STABLE_DELTA",
+        "HOOD_ETH_DELTA_TIMES_ETHUSD"
+      ]
+    },
+    "token_usd_multiwatch": {
+      "primary": "DexScreener pair priceUsd / quote_usd cached ~300s at enroll/swap",
+      "dual_check": "Birdeye GET /defi/price with x-chain: robinhood (MW_BE=1); conservative min on >5% disagree",
+      "evidence": [
+        "/root/multiwatch_20261103/mw.py:2-4,43-44",
+        "/root/multiwatch_20261103/NOTES_PHASE2_BIRDEYE.md",
+        "/root/newrun2_20261104/nr2/nr2_evm.py:4-8",
+        "SOURCE_MANIFEST_HOOD.md:20"
+      ]
+    }
+  },
+  "discovery_sources_pre_nov6": [
+    {
+      "name": "GeckoTerminal",
+      "path": "networks/robinhood/new_pools",
+      "interval_s": 600,
+      "cap": "max 300 / 24h",
+      "evidence": "SOURCE_MANIFEST_HOOD.md:19; mw.py GTNET"
+    },
+    {
+      "name": "DexScreener",
+      "role": "pair metadata, priceUsd, marketCap/fdv, enroll filters",
+      "evidence": "mw.py header + enroll path"
+    },
+    {
+      "name": "FOMO alerts",
+      "role": "wallet/tip discovery corroboration (separate from chain RPC)",
+      "evidence": "grok_jev ingest_fomo.py FOMO_WS"
+    },
+    {
+      "name": "Uniswap V3 PoolCreated watcher",
+      "role": "soft-seed memecoins from factory logs (grok_jev)",
+      "evidence": "new_launches.py"
+    }
+  ],
+  "server_access": {
+    "mac_ssh": "intermittent; succeeded for multiwatch/newrun2 extract",
+    "box_direct_ssh_5_78_209_1": "timed out this session",
+    "paths_read": [
+      "/root/multiwatch_20261103/mw.py",
+      "/root/multiwatch_20261103/NOTES_PHASE3_WALLETS.md",
+      "/root/newrun2_20261104/nr2/nr2_evm.py",
+      "/root/newrun2_20261104/nr2/nr2_evm_impact.py"
+    ]
+  },
+  "probed_at_pt": "2026-11-09 America/Los_Angeles"
+}

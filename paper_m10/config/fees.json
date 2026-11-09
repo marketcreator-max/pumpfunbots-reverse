@@ -1,0 +1,14 @@
+{
+  "version": "fees-v1",
+  "notionalUsd": 100,
+  "entryDelayMs": [2000, 3000],
+  "SOL": {
+    "pumpFeeBps": 100,
+    "pumpSwapFeeBps": 25,
+    "networkFeeLamports": 5000
+  },
+  "HOOD": {
+    "defaultV2FeeBps": 30,
+    "gasUnits": 150000
+  }
+}

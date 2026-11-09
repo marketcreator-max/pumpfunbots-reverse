@@ -1,0 +1,409 @@
+{
+  "version": "exits-v1",
+  "horizonSec": 3600,
+  "exits": [
+    {
+      "id": "BOT",
+      "label": "BOT",
+      "house": true,
+      "research": false,
+      "tags": ["house"],
+      "note": "House baseline copied from the graduation watcher defaults: sell all at 1.5x, at 0.7x, or at 300s.",
+      "rules": [
+        {
+          "id": "bot",
+          "sellPctOfOriginal": 100,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "multiple", "gte": 1.5 },
+              { "kind": "stop", "multipleLte": 0.7 },
+              { "kind": "time", "sec": 300 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "H10",
+      "label": "H10",
+      "house": true,
+      "research": false,
+      "tags": ["house"],
+      "rules": [{ "id": "t", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 10 } }]
+    },
+    {
+      "id": "T30",
+      "label": "T30",
+      "house": true,
+      "research": true,
+      "tags": ["house", "F", "ALL"],
+      "rules": [{ "id": "t", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 30 } }]
+    },
+    {
+      "id": "T60",
+      "label": "T60",
+      "house": false,
+      "research": true,
+      "tags": ["F"],
+      "rules": [{ "id": "t", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 60 } }]
+    },
+    {
+      "id": "T5m",
+      "label": "5m",
+      "house": true,
+      "research": true,
+      "tags": ["house", "O", "B"],
+      "rules": [{ "id": "t", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 300 } }]
+    },
+    {
+      "id": "T15m",
+      "label": "15m",
+      "house": true,
+      "research": false,
+      "tags": ["house"],
+      "rules": [{ "id": "t", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 900 } }]
+    },
+    {
+      "id": "T30_MOONBAG",
+      "label": "T30+10% moonbag",
+      "house": false,
+      "research": true,
+      "tags": ["ALL"],
+      "rules": [
+        { "id": "main", "sellPctOfOriginal": 90, "when": { "kind": "time", "sec": 30 } },
+        {
+          "id": "bag",
+          "after": "main",
+          "sellPctOfOriginal": 10,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "time", "sec": 300 },
+              { "kind": "nurtureFlip", "windowMs": 15000, "belowUsd": -200 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "STAGED",
+      "label": "Staged time",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        { "id": "a", "sellPctOfOriginal": 50, "when": { "kind": "time", "sec": 30 } },
+        { "id": "b", "after": "a", "sellPctOfOriginal": 30, "when": { "kind": "time", "sec": 120 } },
+        { "id": "c", "after": "b", "sellPctOfOriginal": 20, "when": { "kind": "time", "sec": 300 } }
+      ]
+    },
+    {
+      "id": "NURTURE_FLIP",
+      "label": "Nurture-flip",
+      "house": false,
+      "research": true,
+      "tags": ["O", "B"],
+      "rules": [
+        { "id": "flip", "sellPctOfOriginal": 100, "when": { "kind": "nurtureFlip", "windowMs": 15000, "belowUsd": -200 } }
+      ]
+    },
+    {
+      "id": "NURTURE_TRIM",
+      "label": "Nurture-flip trim",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        { "id": "trim", "sellPctOfOriginal": 75, "when": { "kind": "nurtureFlip", "windowMs": 15000, "belowUsd": -200 } },
+        {
+          "id": "rest",
+          "after": "trim",
+          "sellPctOfRemaining": 100,
+          "when": { "kind": "trail", "pct": 0.3, "arm": { "kind": "time", "sec": 0 } }
+        }
+      ]
+    },
+    {
+      "id": "BLATANT_SURGE",
+      "label": "Blatant-surge",
+      "house": false,
+      "research": true,
+      "tags": ["ALL"],
+      "rules": [
+        { "id": "surge", "sellPctOfOriginal": 100, "when": { "kind": "blatantSurge", "windowMs": 15000, "above": 60 } }
+      ]
+    },
+    {
+      "id": "REAL_DRY",
+      "label": "Real-buyer dry-up",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        {
+          "id": "dry",
+          "sellPctOfOriginal": 100,
+          "when": { "kind": "realBuyerDry", "windowMs": 30000, "afterMs": 30000, "requireMultipleGt": 1 }
+        }
+      ]
+    },
+    {
+      "id": "COMBO",
+      "label": "Combo guard",
+      "house": false,
+      "research": true,
+      "tags": ["ALL"],
+      "rules": [
+        {
+          "id": "combo",
+          "when": {
+            "kind": "combo",
+            "checkSec": 30,
+            "extendSec": 300,
+            "elseSellPct": 100,
+            "extendIf": {
+              "kind": "all",
+              "of": [
+                { "kind": "nurtureDominant", "nurtureGte": 50, "blatantLt": 50 },
+                { "kind": "multiple", "gte": 1.0000001 }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "TP2X_TRAIL",
+      "label": "TP2x+trail",
+      "house": true,
+      "research": true,
+      "tags": ["house", "O"],
+      "rules": [
+        { "id": "tp", "sellPctOfOriginal": 50, "when": { "kind": "multiple", "gte": 2 } },
+        {
+          "id": "trail",
+          "after": "tp",
+          "sellPctOfRemaining": 100,
+          "when": { "kind": "trail", "pct": 0.3, "arm": { "kind": "multiple", "gte": 2 } }
+        }
+      ]
+    },
+    {
+      "id": "TP5X_TRAIL",
+      "label": "TP5x+trail",
+      "house": true,
+      "research": true,
+      "tags": ["house", "O"],
+      "rules": [
+        { "id": "tp", "sellPctOfOriginal": 50, "when": { "kind": "multiple", "gte": 5 } },
+        {
+          "id": "trail",
+          "after": "tp",
+          "sellPctOfRemaining": 100,
+          "when": { "kind": "trail", "pct": 0.35, "arm": { "kind": "multiple", "gte": 5 } }
+        }
+      ]
+    },
+    {
+      "id": "LADDER",
+      "label": "Ladder",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        { "id": "a", "sellPctOfOriginal": 25, "when": { "kind": "multiple", "gte": 2 } },
+        { "id": "b", "after": "a", "sellPctOfOriginal": 25, "when": { "kind": "multiple", "gte": 3 } },
+        { "id": "c", "after": "b", "sellPctOfOriginal": 25, "when": { "kind": "multiple", "gte": 5 } },
+        {
+          "id": "trail",
+          "after": "c",
+          "sellPctOfRemaining": 100,
+          "when": { "kind": "trail", "pct": 0.3, "arm": { "kind": "multiple", "gte": 5 } }
+        }
+      ]
+    },
+    {
+      "id": "PEAK_GIVEBACK",
+      "label": "Peak-giveback",
+      "house": false,
+      "research": true,
+      "tags": ["O", "B"],
+      "rules": [
+        {
+          "id": "gb",
+          "sellPctOfOriginal": 100,
+          "when": { "kind": "trail", "pct": 0.35, "arm": { "kind": "multiple", "gte": 1.5 } }
+        }
+      ]
+    },
+    {
+      "id": "STOP40",
+      "label": "Stop -40% + T30",
+      "house": false,
+      "research": true,
+      "tags": ["F"],
+      "rules": [
+        {
+          "id": "stop",
+          "sellPctOfOriginal": 100,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "stop", "multipleLte": 0.6 },
+              { "kind": "time", "sec": 30 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "LIQ_PULL",
+      "label": "Liquidity-pull",
+      "house": false,
+      "research": true,
+      "tags": ["ALL"],
+      "rules": [
+        { "id": "liq", "sellPctOfOriginal": 100, "when": { "kind": "liquidityPull", "dropPct": 0.25, "windowMs": 10000 } }
+      ]
+    },
+    {
+      "id": "BIG_SELLER",
+      "label": "Big-seller",
+      "house": false,
+      "research": true,
+      "tags": ["ALL"],
+      "rules": [
+        { "id": "big", "sellPctOfOriginal": 100, "when": { "kind": "bigSeller", "supplyPct": 0.03, "usd": 1000 } }
+      ]
+    },
+    {
+      "id": "CARRIED",
+      "label": "Bot-carried flip",
+      "house": false,
+      "research": true,
+      "tags": ["B"],
+      "rules": [
+        {
+          "id": "first",
+          "sellPctOfOriginal": 70,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "multiple", "gte": 1.5 },
+              { "kind": "time", "sec": 45 }
+            ]
+          }
+        },
+        {
+          "id": "rest",
+          "after": "first",
+          "sellPctOfRemaining": 100,
+          "when": { "kind": "nurtureFlip", "windowMs": 15000, "belowUsd": -200 }
+        }
+      ]
+    },
+    {
+      "id": "ORGANIC",
+      "label": "Organic hold",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        {
+          "id": "hold",
+          "sellPctOfOriginal": 100,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "time", "sec": 900 },
+              { "kind": "nurtureFlip", "windowMs": 15000, "belowUsd": -200 },
+              { "kind": "trail", "pct": 0.35, "arm": { "kind": "multiple", "gte": 1.5 } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "MC_TARGET",
+      "label": "Market-cap target",
+      "house": false,
+      "research": true,
+      "tags": ["O"],
+      "rules": [
+        {
+          "id": "tp",
+          "sellPctOfOriginal": 50,
+          "when": {
+            "kind": "any",
+            "of": [
+              { "kind": "mcMultiple", "gte": 3 },
+              { "kind": "mcUsd", "gte": 500000 }
+            ]
+          }
+        },
+        {
+          "id": "trail",
+          "after": "tp",
+          "sellPctOfRemaining": 100,
+          "when": {
+            "kind": "trail",
+            "pct": 0.3,
+            "arm": {
+              "kind": "any",
+              "of": [
+                { "kind": "mcMultiple", "gte": 3 },
+                { "kind": "mcUsd", "gte": 500000 }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "SPK_STOP35",
+      "label": "SPK -35% stop",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "SpikeCalls stop: sell all at -35% from entry.",
+      "rules": [
+        { "id": "stop", "sellPctOfOriginal": 100, "when": { "kind": "stop", "multipleLte": 0.65 } }
+      ]
+    },
+    {
+      "id": "SPK_HALF2X",
+      "label": "SPK half at 2x",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "SpikeCalls take profit: sell half once at 2x. The rest stays open.",
+      "rules": [
+        { "id": "half", "sellPctOfOriginal": 50, "when": { "kind": "multiple", "gte": 2 } }
+      ]
+    },
+    {
+      "id": "SPK_VOL",
+      "label": "SPK volume decay",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "note": "After 30 minutes, sell all when the last 15 minutes are under 0.20 of the last-hour pace. That is the h1 tape proxy for h6/(h24/4).",
+      "rules": [
+        { "id": "decay", "sellPctOfOriginal": 100, "when": { "kind": "volumeDecay", "ratio": 0.2, "afterSec": 1800 } }
+      ]
+    },
+    {
+      "id": "SPK_HOLD24",
+      "label": "SPK 24h hold",
+      "house": false,
+      "research": true,
+      "tags": ["spike"],
+      "incompleteUnlessHoldHours": 24,
+      "note": "SpikeCalls max hold is 24 hours. If the tape ends first, the position is marked at the last price and flagged INCOMPLETE.",
+      "rules": [
+        { "id": "hold", "sellPctOfOriginal": 100, "when": { "kind": "time", "sec": 86400 } }
+      ]
+    }
+  ]
+}

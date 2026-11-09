@@ -1,0 +1,12 @@
+{
+  "version": "classify-v1",
+  "sniperWindowMs": 2000,
+  "flipperSellFrac": 0.5,
+  "flipperWindowMs": 60000,
+  "roundTrips": 3,
+  "roundTripWindowMs": 300000,
+  "avgHoldMs": 30000,
+  "highFrequencyMints": 5,
+  "bundleMinBuys": 3,
+  "nurtureNetFloorUsd": -20
+}
