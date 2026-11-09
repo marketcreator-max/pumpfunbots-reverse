@@ -1,0 +1,39 @@
+{
+  "version": "gates-v1",
+  "gates": [
+    {
+      "id": "G0",
+      "sample": { "mod": 10, "keep": 0 },
+      "requireTrades": 1
+    },
+    {
+      "id": "G3",
+      "all": [
+        { "feat": "mcUsd", "gte": 40000 },
+        { "feat": "volumeUsd", "gte": 13000 }
+      ]
+    },
+    {
+      "id": "G3F",
+      "all": [
+        { "feat": "mcUsd", "gte": 40000 },
+        { "feat": "volumeUsd", "gte": 13000 },
+        { "feat": "devHoldPct", "lt": 10 },
+        { "feat": "bundlePct", "lt": 20 },
+        { "feat": "top10Pct", "lt": 30 }
+      ]
+    },
+    {
+      "id": "G3N",
+      "all": [
+        { "feat": "mcUsd", "gte": 40000 },
+        { "feat": "volumeUsd", "gte": 13000 },
+        { "feat": "devHoldPct", "lt": 10 },
+        { "feat": "bundlePct", "lt": 20 },
+        { "feat": "top10Pct", "lt": 30 },
+        { "feat": "nurtureShareLast60", "gte": 50 },
+        { "feat": "blatantShareLast60", "lt": 50 }
+      ]
+    }
+  ]
+}
